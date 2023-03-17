@@ -838,6 +838,7 @@ figf <- figf %>%
                    y = ~lm(percent_percent_eligible_free_k_12 ~ average_daily_pm2_5, 
                            data = plot_cor_data)$fitted.values,
                    line = list(color = '#A5B4BD', width = 2),
+                   marker = list(opacity=0),
                    showlegend = FALSE
                    )
 
