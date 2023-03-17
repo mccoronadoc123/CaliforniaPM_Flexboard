@@ -1,0 +1,891 @@
+---
+title: "California PM Project"
+output: 
+  flexdashboard::flex_dashboard:
+    orientation: column
+    vertical_layout: fill
+    theme:
+      version: 5
+      bootswatch: lux
+---
+
+```{r setup, include=FALSE}
+
+# Required libraries:
+
+require(flexdashboard)
+require(tidyverse)
+require(rio)
+require(janitor)
+require(here)
+require(ggplot2)
+require(forcats)
+require(colorspace)
+require(plotly)
+require(tmap)
+require(RColorBrewer)
+require(gghighlight)
+require(viridis)
+require(dplyr)
+library(ggplot2)
+
+
+
+# Read geospatial data: 
+
+require(tigris)
+require(sf)
+options(tigris_class = "sf")
+
+
+# Import the California data
+
+health <- import (here ("data", "cal_health_2022.csv")) %>% 
+  clean_names() %>% 
+   as_tibble()
+
+absent <- import (here ("data", "chronic_absent_2022.csv")) %>%   
+  clean_names() %>% 
+  as_tibble()
+
+lunch <- import (here ("data", "freelunch2022.csv")) %>%   
+  clean_names()
+
+
+other <- import (here ("data", "cal_other_measures_2022.csv")) %>%   
+  clean_names()
+```
+
+
+Sidebar {.sidebar}
+===========================
+### INTRODUCTION
+
+This project explores the relationships between school absenteeism, SES, and outdoor air pollution in the state of California
+
+RESEARCH QUESTIONS
+
+1.	How is absenteeism distributed by county in California?
+
+2.	How is outdoor air pollution distributed by county in California?
+
+3.	How is children SES distributed by county in California?
+
+4.	Is there a relationship between outdoor PM 2.5 air pollution, SES, and school chronic absenteeism in California counties? 
+
+
+Each menu shows the progress in versions V0, V1 and V2 of the evolution of each graphic representation. 
+
+
+Absenteeism V0 {data-navmenu="Absenteeism"}
+======================================
+
+
+Column {data-width=500}
+-----------------------------------------------------------------------
+
+### Absenteeism distribution per county in California
+
+```{r include=FALSE}
+# Data cleaning for absenteeism 
+
+head(absent)
+
+absent$chronic_absenteeism_rate <- as.numeric(absent$chronic_absenteeism_rate) 
+
+absent_co <- absent %>% 
+  group_by (county_name) %>% 
+  summarize(chronic_absent = mean(chronic_absenteeism_rate, na.rm = TRUE)) %>% 
+  rename(NAME = county_name)
+  as_tibble()
+  
+absent_co$chronic_absent <- formatC(absent_co$chronic_absent)
+  
+```
+
+
+```{r include=FALSE}
+# Data cleaning for health
+
+colnames(health)
+
+head(health)
+
+health_co <- health %>% 
+  select(county, average_daily_pm2_5) %>% 
+  filter(county != "") %>% 
+  rename(NAME = county)
+
+health_co
+```
+
+
+```{r include=FALSE}
+# California counties map
+
+cali_co <- counties("California", cb = FALSE, resolution = "500k")
+
+cali_co
+
+
+cali_plan <- ggplot() +
+  geom_sf(data = cali_co, color = "gray70", fill = "blue", size = 0.25) +
+  theme_minimal()
+```
+
+
+```{r include = FALSE}
+
+#Absenteeism map preliminaries
+
+cali_co_absent <- left_join(cali_co, absent_co)
+
+colnames(cali_co_absent)
+
+cali_co_absent <- cali_co_absent %>% 
+  rename("Absenteeism" = "chronic_absent")
+
+colnames(cali_co_absent)
+
+cali_co_absent$Absenteeism <- as.numeric(cali_co_absent$Absenteeism)
+
+head(cali_co_absent)
+
+```
+
+
+```{r include = FALSE}
+cali_plan_absent0 <- ggplot(cali_co_absent) +
+  geom_sf(aes(color = Absenteeism, fill = Absenteeism)) +
+  guides(color = "none") +
+  scale_fill_continuous_sequential("Dark Mint",
+                                  rev = TRUE) +
+                                # mid = mean(cali_co_absent$chronic_absent, na.rm = TRUE)) +
+    scale_color_continuous_sequential("Dark Mint",
+                                  rev = TRUE) +
+                                 # mid = mean(cali_co_absent$chronic_absent, na.rm = TRUE)) +
+  theme(legend.position = "bottom",
+        legend.key.width = unit(2, "cm")) +
+  labs(title = "Absenteeism distribution per county in California",
+       fill = "Chronic absenteeism rate by county") +
+  theme_minimal()
+
+```
+
+```{r}
+
+cali_plan_absent0
+```
+
+
+Column {data-width=350}
+-----------------------------------------------------------------------
+
+### Top 15 counties with highest absenteeism rate in California
+
+```{r fig.height=9}
+#Absenteeism bargraph 1
+
+cali_bar_absent <- cali_co_absent %>% 
+  mutate(NAME = fct_reorder(NAME, Absenteeism)) %>% 
+  filter(Absenteeism >= 39.2) %>% 
+  ggplot(aes(Absenteeism, NAME)) +
+   geom_col(fill = "#92ddc8" ) +
+     labs(title = "Top 15 counties with highest absenteeism rate in California",
+       x = "Chronic absenteeism rate", 
+       y = "County") +
+   theme_minimal()
+  
+cali_bar_absent
+```
+
+
+Absenteeism V1 {data-navmenu="Absenteeism"}
+======================================
+
+
+Column {data-width=500}
+-----------------------------------------------------------------------
+
+### Absenteeism distribution per county in California
+
+
+```{r include = FALSE}
+#Absenteeism map V1
+
+cali_bar_absent <- cali_co_absent %>% 
+  mutate(NAME = fct_reorder(NAME, Absenteeism)) %>% 
+  filter(Absenteeism >= 39.2) 
+
+cali_plan_absent <- ggplot(cali_co_absent) +
+  geom_sf(aes(color = Absenteeism, fill = Absenteeism)) +
+  guides(color = "none") +
+  scale_fill_continuous_sequential("Dark Mint",
+                                  rev = TRUE) +
+                                # mid = mean(cali_co_absent$chronic_absent, na.rm = TRUE)) +
+    scale_color_continuous_sequential("Dark Mint",
+                                  rev = TRUE) +
+                                 # mid = mean(cali_co_absent$chronic_absent, na.rm = TRUE)) +
+  theme(legend.position = "bottom",
+        legend.key.width = unit(2, "cm")) +
+  labs(#title = "Absenteeism distribution per county in California",
+       fill = "% Absenteeism") +
+  geom_sf_text(data = cali_bar_absent, 
+              aes(x = INTPTLAT, y = INTPTLON, label = NAME), 
+              size = 2, 
+              fontface = "bold") +
+              coord_sf(xlim = c(-125, -110), ylim = c(30, 45), expand = FALSE) +
+  theme_minimal() +
+  theme_void()
+```
+
+
+```{r}
+cali_plan_absent
+```
+
+Column {data-width=350}
+-----------------------------------------------------------------------
+
+### Top 15 counties with highest absenteeism rate in California
+
+```{r fig.height=9}
+#Absenteeism bargraph 1
+
+cali_bar_absent1 <- cali_co_absent %>% 
+  mutate(NAME = fct_reorder(NAME, Absenteeism)) %>% 
+  filter(Absenteeism >= 39.2) %>% 
+  ggplot(aes(Absenteeism, NAME)) +
+   geom_col(fill = "#92ddc8" ) +
+     labs(#title = "Top 15 counties with highest absenteeism rate in California",
+       x = "Chronic absenteeism rate", 
+       y = "County") +
+   theme_minimal()
+  
+cali_bar_absent1
+
+
+```
+
+
+Absenteeism V2 {data-navmenu="Absenteeism"}
+======================================
+
+Column {data-width=500}
+-----------------------------------------------------------------------
+
+### Absenteeism distribution per county in California
+
+```{r include = FALSE}
+
+tmap_mode("view")
+
+centroids <- st_centroid(cali_co_absent)
+
+cali_absent_intmap <- tm_shape(cali_co_absent) +
+              tm_polygons("Absenteeism",
+              palette = "PuBu",
+              border.col = "white",
+              lwd = 0.8,
+              style='cont',
+              id ='NAME') + #this is the number I see when I hover above the map
+  #tm_shape(centroids) +
+  #tm_text(text = "NAME", size = 0.8, fontfamily = "serif", fontface = "bold") +
+  tm_layout(legend.outside = TRUE)
+  
+
+```
+
+
+```{r}
+cali_absent_intmap
+
+```
+
+
+Column {data-width=350}
+-----------------------------------------------------------------------
+
+### Chronic absenteeism rates per county
+
+
+```{r fig.height=9}
+#Absenteeism bargraph 1
+
+cali_bar_absentsub <- cali_co_absent %>% 
+  mutate(NAME = fct_reorder(NAME, Absenteeism)) %>% 
+  filter(Absenteeism >= 39.2) 
+
+cali_bar_absent <- cali_co_absent %>% 
+  mutate(NAME = fct_reorder(NAME, Absenteeism)) %>% 
+  ggplot(aes(Absenteeism, NAME)) +
+   geom_col(aes(fill = Absenteeism), show.legend = FALSE) +
+   scale_fill_gradient2(low="#f1eef6", high="#045a8d") +
+   labs(#title = "Top 15 counties with highest absenteeism rate in California",
+       x = " ", 
+       y = " ") +
+  #gghighlight(Absenteeism >= 39.2) + 
+   theme_minimal()
+  
+cali_bar_absent
+
+```
+
+
+PM 2.5 V0 {data-navmenu="Particulate matter"}
+========================================= 
+
+
+Column {data-width=500}
+-----------------------------------------------------------------------
+
+### PM 2.5 distribution per county in California
+
+```{r include = FALSE}
+
+cali_co_health <- left_join(cali_co, health_co)
+
+colnames(cali_co_health)
+
+cali_co_health$average_daily_pm2_5 <- as.numeric(cali_co_health$average_daily_pm2_5)
+
+head(cali_co_health)
+
+cali_plan_health <- ggplot(cali_co_health) +
+  geom_sf(aes(color = average_daily_pm2_5, fill = average_daily_pm2_5)) +
+  guides(color = "none") +
+  scale_fill_continuous_diverging ("Blue-Red 2",
+                                  rev = TRUE,
+                                  mid = 15) +
+    scale_color_continuous_diverging ("Blue-Red 2",
+                                  rev = TRUE,
+                                  mid = 15) + # 15 mid is the WHO's threshold for PM 2.5 exposure
+  theme(legend.position = "bottom",
+        legend.key.width = unit(2, "cm")) +
+  labs(title = "Average daily PM2.5 by county in California",
+       fill = "Average daily PM2.5") +
+  theme_minimal()
+
+```
+
+```{r}
+cali_plan_health
+```
+
+
+
+Column {data-width=350}
+-----------------------------------------------------------------------
+
+### Counties with unhealthy air quality in California
+
+```{r}
+cali_bar_health <- cali_co_health %>% 
+  mutate(NAME = fct_reorder(NAME, average_daily_pm2_5)) %>% 
+  filter(average_daily_pm2_5 >= 15) %>% 
+  ggplot(aes(average_daily_pm2_5, NAME)) +
+  geom_col(fill = "#9FDFF5" ) +
+  labs(title = str_wrap("Counties with average daily PM2.5 concentrations above WHO recommendations", width = 50),
+       x = "Average daily PM2.5 concentration", 
+       y = "County") +
+  theme_minimal()
+  
+cali_bar_health
+```
+
+
+PM 2.5 V1 {data-navmenu="Particulate matter"}
+========================================= 
+
+Column {data-width=500}
+-----------------------------------------------------------------------
+
+### PM 2.5 distribution per county in California
+
+```{r include = FALSE}
+
+cali_co_health <- left_join(cali_co, health_co)
+
+colnames(cali_co_health)
+
+cali_co_health$average_daily_pm2_5 <- as.numeric(cali_co_health$average_daily_pm2_5)
+
+head(cali_co_health)
+
+cali_plan_health <- ggplot(cali_co_health) +
+  geom_sf(aes(color = average_daily_pm2_5, fill = average_daily_pm2_5)) +
+  guides(color = "none") +
+  scale_color_gradient2(midpoint = 15, low = "#2166ac", mid = "#f7f7f7",
+                            high = "#b2182b") +
+  scale_fill_gradient2(midpoint = 15, low = "#2166ac", mid = "#f7f7f7",
+                            high = "#b2182b") +
+  theme(legend.position = "bottom",
+        legend.key.width = unit(2, "cm")) +
+  labs(title = "Average daily PM2.5",
+       fill = "Average daily PM2.5") +
+  theme_minimal() +
+  theme_void()
+
+```
+
+
+```{r}
+
+cali_plan_health
+
+```
+
+
+Column {data-width=350}
+-----------------------------------------------------------------------
+
+### Counties with PM2.5 above WHO reccomendations in California
+
+```{r include=FALSE}
+
+#Bargraph PM in schools 
+cali_bar_health <- cali_co_health %>% 
+  mutate(NAME = fct_reorder(NAME, average_daily_pm2_5)) %>% 
+ # filter(average_daily_pm2_5 >= 15) %>% 
+  ggplot(aes(average_daily_pm2_5, NAME)) +
+  geom_col(fill = "#b2182b" ) +
+  labs(title = str_wrap("Counties with average daily PM2.5 concentrations above WHO recommendations", width = 50),
+       x = "Average daily PM2.5 concentration", 
+       y = "County") +
+  theme_minimal()
+  
+```
+
+```{r}
+cali_bar_health
+```
+
+
+PM 2.5 V2 {data-navmenu="Particulate matter"}
+========================================= 
+
+Column {data-width=500}
+-----------------------------------------------------------------------
+
+### Average daily PM2.5 distribution in California
+
+```{r include = FALSE}
+
+tmap_mode("view")
+
+centroids <- st_centroid(cali_co_health)
+
+colnames(cali_co_health)
+
+cali_health_intmap <- tm_shape(cali_co_health) +
+              tm_polygons("average_daily_pm2_5",
+              palette = c("#2166ac", "#f7f7f7", "#b2182b"),
+              border.col = "white",
+              lwd = 0.8,
+              style='cont',
+              id ='NAME') + #this is the number I see when I hover above the map
+  #tm_shape(centroids) +
+  #tm_text(text = "NAME", size = 0.8, fontfamily = "serif", fontface = "bold") +
+  tm_layout(legend.outside = TRUE)
+  
+```
+
+
+```{r}
+cali_health_intmap
+
+```
+
+
+Column {data-width=350}
+-----------------------------------------------------------------------
+
+### Counties with average daily PM2.5 above WHO recommendations 
+
+
+```{r include=FALSE, fig.height=20, fig.width=15}
+
+# Bargraph PM in schools 
+
+cali_bar_health <- cali_co_health %>% 
+  mutate(NAME = fct_reorder(NAME, average_daily_pm2_5)) %>% 
+  ggplot(aes(average_daily_pm2_5, NAME)) +
+  geom_col(aes(fill = average_daily_pm2_5), color = "grey80", show.legend = FALSE) +
+  labs(x = " ", 
+       y = " ",
+       caption = "15 µg/m3 is the WHO threshold for PM2.5 24-hour exposures") +
+    scale_fill_gradient2(low = "#2166ac", 
+                       high = "#b2182b", 
+                       midpoint = 14) +
+  theme_minimal() +
+  theme(text = element_text(size=30)) +
+  geom_vline(xintercept = 15,color = "gray40", linetype = 2, size = 1)
+ 
+```
+
+
+```{r fig.height=20, fig.width=15}
+cali_bar_health
+
+```
+
+
+SES V0 {data-navmenu="Socioeconomic status"}
+========================================= 
+
+Column {data-width=500}
+-----------------------------------------------------------------------
+
+### Socioeconomic Status
+
+```{r include=FALSE}
+
+#Data free lunch program
+
+colnames(lunch)
+
+lunch_cali <- lunch %>% 
+  select(county_name, percent_percent_eligible_free_k_12) %>% 
+  as_tibble()
+
+lunch_cali$percent_percent_eligible_free_k_12 <- gsub("%", "", as.character(lunch_cali$percent_percent_eligible_free_k_12))
+
+
+lunch_cali$percent_percent_eligible_free_k_12 <- as.numeric(lunch_cali$percent_percent_eligible_free_k_12)
+
+head(lunch_cali)
+
+lunch_co <- lunch_cali %>% 
+  group_by(county_name) %>% 
+  summarise(percent_percent_eligible_free_k_12 = mean(percent_percent_eligible_free_k_12)) %>% 
+  rename(NAME = county_name)
+
+lunch_co
+
+```
+
+
+```{r include=FALSE}
+
+# Free lunch Map
+
+cali_co_lunch <- left_join(cali_co, lunch_co)
+
+colnames(cali_co_lunch)
+
+#cali_co_health2$percent <- as.numeric(cali_co_health2$average_daily_pm2_5)
+
+head(cali_co_lunch)
+
+cali_plan_lunch <- ggplot(cali_co_lunch) +
+  geom_sf(aes(color = percent_percent_eligible_free_k_12, fill = percent_percent_eligible_free_k_12)) +
+  guides(color = "none") +
+  scale_fill_continuous_sequential ("Sunset",
+                                  rev = TRUE) +
+    scale_color_continuous_sequential ("Sunset",
+                                  rev = TRUE) + 
+  theme(legend.position = "bottom",
+        legend.key.width = unit(2, "cm")) +
+  labs(title = "Average % of elegible for free lunch in K-12 schools",
+       fill = "Average % of elegible for free lunch") +
+  theme_minimal()
+```
+
+
+```{r}
+cali_plan_lunch
+```
+
+
+Column {data-width=350}
+-----------------------------------------------------------------------
+
+### Free Lunch Elegibility Ranking by County
+
+```{r include=FALSE}
+colnames(cali_co_lunch)
+
+cali_co_lunch <- cali_co_lunch %>% 
+  rename("Free_lunch" = "percent_percent_eligible_free_k_12")
+
+```
+
+
+```{r}
+#Bargraph PM in schools 
+
+cali_bar_ses <- cali_co_lunch %>% 
+  mutate(NAME = fct_reorder(NAME, Free_lunch)) %>% 
+  ggplot(aes(Free_lunch, NAME)) +
+  geom_col(aes(fill = Free_lunch), show.legend = FALSE) +
+  labs(x = "Free lunch elegibility %", 
+       y = "County") +
+  scale_fill_gradient(high="#6a0d83", low = "#eeaf61") +
+  theme_minimal()
+
+
+cali_bar_ses
+
+```
+
+
+SES V1 {data-navmenu="Socioeconomic status"}
+========================================= 
+
+
+Column {data-width=500}
+-----------------------------------------------------------------------
+
+### Average daily PM2.5 distribution in California
+
+```{r include = FALSE}
+
+tmap_mode("view")
+
+centroids <- st_centroid(cali_co_lunch)
+
+colnames(cali_co_lunch)
+
+head(cali_co_lunch)
+
+cali_co_lunch$Free_lunch <- formatC(cali_co_lunch$Free_lunch)
+
+cali_co_lunch$Free_lunch <- as.numeric(cali_co_lunch$Free_lunch)
+
+cali_health_intmap <- tm_shape(cali_co_lunch) +
+              tm_polygons("Free_lunch",
+              palette = "-magma",
+              border.col = "white",
+              lwd = 0.8,
+              style='cont',
+              id ='NAME') + 
+  tm_layout(legend.outside = TRUE)
+  
+```
+
+
+```{r}
+cali_health_intmap
+
+```
+
+
+Column {data-width=350}
+-----------------------------------------------------------------------
+
+### Free Lunch Elegibility Ranking by County
+
+```{r include=FALSE}
+#Bargraph PM in schools 
+
+cali_bar_ses <- cali_co_lunch %>% 
+  mutate(NAME = fct_reorder(NAME, Free_lunch)) %>% 
+  ggplot(aes(Free_lunch, NAME)) +
+  geom_col(aes(fill = Free_lunch), show.legend = FALSE) +
+  labs(x = " ", 
+       y = " ") +
+  scale_fill_gradient(high="#6a0d83", low = "#eeaf61") +
+  theme_minimal() +
+  theme(text = element_text(size=30), axis.text.x = element_text(hjust=2))
+
+
+
+```
+
+```{r include=TRUE, fig.height=20, fig.width=15}
+cali_bar_ses
+```
+
+
+Correlation V0 {data-navmenu="Correlations"}
+======================================
+
+
+Column {data-width=500}
+-----------------------------------------------------------------------
+
+### Correlation between PM2.5 and Free Lunch Elegibility %
+
+```{r include=FALSE}
+
+plot_cor_data <- left_join(health_co, absent_co) %>% 
+  drop_na() %>% 
+  as_tibble()
+
+head(plot_cor_data)
+
+plot_cor_data <- left_join(plot_cor_data, lunch_co)
+
+plot_cor_data <- plot_cor_data %>% 
+  mutate(Absenteeism =  case_when(
+           chronic_absent <= 30 ~ "0 to 30%",
+           chronic_absent > 30 & chronic_absent <= 40 ~ "31 to 40%",
+           chronic_absent > 40 & chronic_absent <= 50 ~ "41 to 50%",
+           chronic_absent > 50 ~ "above 50%")) 
+
+```
+
+
+
+```{r include=FALSE}
+
+plot_cor_data <- left_join(health_co, absent_co) %>% 
+  drop_na() %>% 
+  as_tibble()
+
+head(plot_cor_data)
+
+plot_cor_data <- left_join(plot_cor_data, lunch_co)
+
+
+plot_cor <- ggplot(plot_cor_data, aes(x = average_daily_pm2_5, y = percent_percent_eligible_free_k_12)) +
+  geom_point(aes(size = chronic_absent)) +
+  geom_smooth(method = lm, color = "#368A4B") +
+  labs(title = "Correlation between PM2.5 and Free lunch elegibility %", 
+       x = "Average daily PM2.5 concentration", 
+       y = "Average % elegible for free lunch", 
+       size = "Average chronic absenteeism rate") +
+  theme_minimal() +
+  theme(legend.position = "none")
+
+```
+
+
+```{r}
+plot_cor 
+```
+
+
+
+Row {data-width=350}
+-----------------------------------------------------------------------
+
+### Data sources
+
+_1.	California schools’ absenteeism data:_
+
+Chronic absenteeism rate is “The unduplicated count of students determined to be chronically absent (Chronic Absenteeism Count) divided by the Chronic Absenteeism Enrollment at the selected entity for the selected population using the available filters.” 
+
+The graphics presented here use the chronic absenteeism rate of the total students of each academic institution and average it by county to create the visualizations. This project uses data of chronic absenteeism from California Department of Education of the year 2021-2022, that is publicly available here: https://www.cde.ca.gov/ds/ad/filesabd.asp. 
+
+
+_2.	Outdoor air pollution by county in California:_
+
+Particulate matter is deemed as a cause for respiratory illnesses in both children and adults. Particles of less than 2.5 μg/ m3 (respirable) can infiltrate the gas-exchange region of the lungs. PM 2.5 has been related to health effects like reduced lung function, asthma and other pulmonary diseases in children and adults who were exposed to high levels of endotoxins present in PM (Morakinyo et al., 2016) . 
+
+Average daily outdoor PM 2.5 air pollution by county in California is available as one of the county health rankings of the state here: https://www.countyhealthrankings.org/explore-health-rankings/california/data-and-resources.
+
+
+
+Correlation V1 {data-navmenu="Correlations"}
+======================================
+
+
+Column {data-width=500}
+-----------------------------------------------------------------------
+
+### Correlation between PM2.5 and Free Lunch Elegibility %
+
+
+
+```{r include=FALSE}
+
+plot_cor_data <- left_join(health_co, absent_co) %>% 
+  drop_na() %>% 
+  as_tibble()
+
+head(plot_cor_data)
+
+plot_cor_data <- left_join(plot_cor_data, lunch_co)
+
+plot_cor_data <- plot_cor_data %>% 
+  mutate(Absenteeism =  case_when(
+           chronic_absent <= 30 ~ "0 to 30%",
+           chronic_absent > 30 & chronic_absent <= 40 ~ "31 to 40%",
+           chronic_absent > 40 & chronic_absent <= 50 ~ "41 to 50%",
+           chronic_absent > 50 ~ "above 50%")) 
+
+```
+
+
+```{r include=FALSE}
+
+library(plotly)
+
+head(plot_cor_data)
+
+#colorios <- c("#5099E0")  
+#color = '#5099E0'
+
+figf <-  plot_ly(data = plot_cor_data,
+                 x = ~average_daily_pm2_5,
+                 y = ~percent_percent_eligible_free_k_12,
+                 type = "scatter",
+                 mode = "markers",
+                 color = ~Absenteeism,
+                 colors = c("#c7e9b4", "#7fcdbb", "#1d91c0", "#0c2c84"),
+                 text = ~paste("District: ", NAME,
+                             #  "<br>PM 2.5: ", average_daily_pm2_5, 
+                             #  "<br>Free lunch elegibility: ", percent_percent_eligible_free_k_12,
+                               "<br>Absenteeism: ", chronic_absent),
+                 marker = list(size = 12))
+                 
+                 
+figf <- figf %>% 
+         add_trace(type = 'scatter',
+                   mode = 'lines',
+                   x = ~average_daily_pm2_5, 
+                   y = ~lm(percent_percent_eligible_free_k_12 ~ average_daily_pm2_5, 
+                           data = plot_cor_data)$fitted.values,
+                   line = list(color = '#A5B4BD', width = 2),
+                   showlegend = FALSE
+                   )
+
+
+modelio <- lm(percent_percent_eligible_free_k_12 ~ average_daily_pm2_5, data = plot_cor_data)
+modelio
+
+r2 <- summary(modelio)$r.squared
+r2
+
+
+figf<- figf %>%  layout(title = " ", 
+                        yaxis = list(title = "Free Lunch Elegibility %"), 
+                        xaxis = list(title = "Mean daily PM 2.5 exposure"),
+                        legend = list(title = list(text = "Absenteeism")),
+                        annotations = list(x = 15, y = 62,
+                            text = paste("R-squared =", round(r2, 2),
+                                         "<br> y = ", round(coef(modelio)[2], 2),
+                                         "x + ", round(coef(lm(modelio)))[1]), 
+                            showarrow = FALSE)
+                        ) 
+
+
+```
+
+
+```{r}
+figf
+```
+
+
+
+Row {data-width=350}
+-----------------------------------------------------------------------
+
+### Data sources
+
+_1.	California schools’ absenteeism data:_
+
+Chronic absenteeism rate is “The unduplicated count of students determined to be chronically absent (Chronic Absenteeism Count) divided by the Chronic Absenteeism Enrollment at the selected entity for the selected population using the available filters.” 
+
+The graphics presented here use the chronic absenteeism rate of the total students of each academic institution and average it by county to create the visualizations. This project uses data of chronic absenteeism from California Department of Education of the year 2021-2022, that is publicly available here: https://www.cde.ca.gov/ds/ad/filesabd.asp. 
+
+
+_2.	Outdoor air pollution by county in California:_
+
+Particulate matter is deemed as a cause for respiratory illnesses in both children and adults. Particles of less than 2.5 μg/ m3 (respirable) can infiltrate the gas-exchange region of the lungs. PM 2.5 has been related to health effects like reduced lung function, asthma and other pulmonary diseases in children and adults who were exposed to high levels of endotoxins present in PM (Morakinyo et al., 2016) . 
+
+Average daily outdoor PM 2.5 air pollution by county in California is available as one of the county health rankings of the state here: https://www.countyhealthrankings.org/explore-health-rankings/california/data-and-resources.
+
+
